@@ -24,17 +24,21 @@ jobs:
       - name: We exit the step if the proto file already exists
         run: | 
           if [ -f "./protos/${{ env.latest-linux-version }}.txt.gz" ]; then
-            exit 0;
+            echo "EXTRACT_PROTOS=false" >> $GITHUB_ENV
+          else 
+            echo "EXTRACT_PROTOS=true" >> $GITHUB_ENV
           fi
 
       - name: Clone Kernel
         uses: actions/checkout@v4
+        if: env.EXTRACT_PROTOS == 'true'
         with:
           repository: torvalds/linux
           ref: ${{ env.latest-linux-version }}
           path: ./linux
 
       - name: Extract prototypes for that kernel
+        if: env.EXTRACT_PROTOS == 'true'
         run: |
           set -euxo pipefail
 
@@ -44,16 +48,13 @@ jobs:
           version=${{ env.latest-linux-version }}
           out=../protos/$version.txt
 
-          if [ ! -f "$out.gz" ]
-          then
-              while read file
-              do 
-                  echo "$version: $file"
-                  file=$(sed -e 's/^\.\///' <<<$file)
-                  ../cprotos.sh $file | sed -e"s#^#$version:$file:#" >> $out
-              done < <(find -type f -name '*.c' )
-              gzip $out
-          fi
+          while read file
+          do 
+              echo "$version: $file"
+              file=$(sed -e 's/^\.\///' <<<$file)
+              ../cprotos.sh $file | sed -e"s#^#$version:$file:#" >> $out
+          done < <(find -type f -name '*.c' )
+          gzip $out
 
       - name: Check for changes in protos directory
         id: check-changes
