@@ -5,10 +5,15 @@ on:
     types: [manual_trigger]
   schedule:
     - cron: '0 0 * * *'  # Runs daily at midnight
+  push:
+    paths:
+      - '.github/workflows/keep-alive.yml'  # Trigger when this workflow file is modified
 
 jobs:
   keep_alive:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Grant write permission to the repository contents
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
