@@ -41,8 +41,8 @@ jobs:
           # we work in linux directory
           cd linux
 
-          out=../protos/$version.txt
           version=${{ env.latest-linux-version }}
+          out=../protos/$version.txt
 
           if [ ! -f "$out.gz" ]
           then
