@@ -1,0 +1,78 @@
+name: Daily Proto Extraction
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  extract-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Grant write permission to the repository contents
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Define Variable
+        run: |
+          LATEST_LINUX_VERSION=$(git ls-remote --tags https://github.com/torvalds/linux.git | grep -P 'refs/tags/v\d+\.\d+$' | awk '{print$NF}' | awk -F'/' '{print$NF}' | sort -V | tail -1)
+          echo "latest-linux-version=$LATEST_LINUX_VERSION" >> $GITHUB_ENV
+          
+
+      - name: We exit the step if the proto file already exists
+        run: | 
+          if [ -f "./protos/${{ env.latest-linux-version }}.txt.gz" ]; then
+            exit 0;
+          fi
+
+      - name: Clone Kernel
+        uses: actions/checkout@v4
+        with:
+          repository: torvalds/linux
+          ref: ${{ env.latest-linux-version }}
+          path: ./linux
+
+      - name: Extract prototypes for that kernel
+        run: |
+          # we work in linux directory
+          cd linux
+
+          out=../protos/$version.txt
+          version=${{ env.latest-linux-version }}
+
+          if [ ! -f "$out.gz" ]
+          then
+              while read file
+              do 
+                  echo "$version: $file"
+                  file=$(sed -e 's/^\.\///' <<<$file)
+                  $ROOT/cprotos.sh $file | sed -e"s#^#$version:$file:#" >> $out
+              done < <(find -type f -name '*.c' )
+              gzip $out
+          fi
+
+      - name: Check for changes in protos directory
+        id: check-changes
+        run: |
+          if [ -n "$(git status --porcelain ./protos/)" ]; then
+            echo "changes_detected=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes_detected=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check-changes.outputs.changes_detected == 'true'
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # Add all files in the protos directory
+          git add ./protos/
+
+          # Commit changes
+          git commit -m "update: protos from daily extraction [skip ci]"
+
+          # Push changes
+          git push origin HEAD:${{ github.ref }}
