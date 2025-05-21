@@ -43,7 +43,7 @@ jobs:
           set -euxo pipefail
 
           # we work in linux directory
-          cd linux
+          pushd linux
 
           version=${{ env.latest-linux-version }}
           out=../protos/$version.txt
@@ -55,6 +55,14 @@ jobs:
               ../cprotos.sh $file | sed -e"s#^#$version:$file:#" >> $out
           done < <(find -type f -name '*.c' )
           gzip $out
+          popd
+
+          # now update the latest symlink
+          pushd protos
+          unlink latest.txt.gz
+          ln -s "$out.gz" latest.txt.gz
+
+
 
       - name: Check for changes in protos directory
         id: check-changes
